@@ -83,3 +83,37 @@ def test_contact_angle_changes_frequencies():
     g0 = BearingGeometry(9, 0.3, 1.5, 0)
     g15 = BearingGeometry(9, 0.3, 1.5, 15)
     assert fault_frequencies(g15, 30)["BPFO"] > fault_frequencies(g0, 30)["BPFO"]
+
+
+# ---- v0.2.0: spectral kurtosis band selection & frequency features ----
+
+def test_select_band_finds_resonance():
+    from vibkit import select_band
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
+    from demo_outer_race_fault import simulate_outer_race_fault
+    fs = 12_000
+    _, x, bpfo = simulate_outer_race_fault(fs=fs, snr_db=-5, resonance_hz=3_000)
+    res = select_band(x, fs)
+    lo, hi = res["band"]
+    assert 2_000 < (lo + hi) / 2 < 4_000  # inside the excited resonance region
+    f, a = envelope_spectrum(x, fs, band=res["band"])
+    sel = (f > 20) & (f < 500)
+    assert f[sel][np.argmax(a[sel])] == pytest.approx(bpfo, abs=2)
+
+
+def test_spectral_kurtosis_gaussian_near_zero():
+    from vibkit import spectral_kurtosis
+    x = np.random.default_rng(3).normal(size=60_000)
+    _, sk = spectral_kurtosis(x, fs=1000, nperseg=128)
+    assert np.median(np.abs(sk[1:-1])) < 0.2
+
+
+def test_frequency_features_sine():
+    from vibkit import frequency_features, FREQ_FEATURE_NAMES
+    fs = 1000
+    t = np.arange(1000) / fs
+    sine = dict(zip(FREQ_FEATURE_NAMES, frequency_features(np.sin(2 * np.pi * 120 * t), fs)[0]))
+    assert sine["peak_freq"] == pytest.approx(120)
+    assert sine["mean_freq"] == pytest.approx(120, abs=1)
+    noise = frequency_features(np.random.default_rng(4).normal(size=1000), fs)[0]
+    assert sine["spectral_entropy"] < 0.1 < 0.8 < noise[4]

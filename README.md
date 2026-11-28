@@ -14,8 +14,8 @@ Built as a clean preprocessing base for deep-learning bearing diagnosis experime
 | Module | What it does |
 |---|---|
 | `vibkit.segmentation` | Sliding-window segmentation (with overlap for augmentation), per-sample z-score / min-max normalization |
-| `vibkit.features` | 11 time-domain indicators: RMS, peak, kurtosis, skewness, crest / shape / impulse / clearance factors, … |
-| `vibkit.spectral` | Amplitude spectrum, band-pass filtering, Hilbert **envelope spectrum**, STFT spectrogram |
+| `vibkit.features` | 11 time-domain indicators (RMS, kurtosis, crest / impulse / clearance factors, …) and 5 frequency-domain indicators (spectral centroid, spread, RMS frequency, peak frequency, spectral entropy) |
+| `vibkit.spectral` | Amplitude spectrum, band-pass filtering, Hilbert **envelope spectrum**, **spectral kurtosis** with automatic band selection, STFT spectrogram |
 | `vibkit.bearing` | BPFO, BPFI, BSF, FTF from bearing geometry (CWRU 6205 drive-end geometry included) |
 | `vibkit.datasets` | Loader for CWRU `.mat` files → `X, y` arrays ready for training |
 
@@ -51,6 +51,24 @@ print(fault_frequencies(CWRU_DE_6205, shaft_hz=1797 / 60))
 f, a = envelope_spectrum(x, fs, band=(2_000, 4_000))
 ```
 
+### Automatic band selection (spectral kurtosis)
+
+Envelope analysis works best when the signal is first filtered around the
+resonance that the fault impacts excite. `select_band` finds that band
+automatically with a simplified kurtogram: spectral kurtosis is computed at
+several frequency resolutions and the most statistically significant band wins.
+
+```python
+from vibkit import select_band, envelope_spectrum
+
+res = select_band(x, fs)
+print(res["band"])            # e.g. (2625.0, 3375.0) Hz
+f, a = envelope_spectrum(x, fs, band=res["band"])
+```
+
+On the simulated outer-race fault the selected band finds BPFO in 20/20 runs at
+0 dB and −5 dB SNR, and in 14/20 runs at −10 dB, where the fault is deeply buried in noise.
+
 ### Loading CWRU data
 
 Download the `.mat` files from the
@@ -76,8 +94,9 @@ python examples/demo_outer_race_fault.py
 ```
 
 Simulates periodic impacts from an outer-race defect exciting a 3 kHz resonance,
-buried in noise. The fault is hard to see in the raw signal and the plain spectrum,
-but the envelope spectrum shows clear peaks at BPFO (107.4 Hz) and its harmonics.
+buried in noise. Spectral kurtosis selects the band around the resonance, and the
+envelope spectrum shows clear peaks at BPFO (107.4 Hz) and its harmonics, although
+the fault is hard to see in the raw signal and the plain spectrum.
 
 ## Tests
 
@@ -87,6 +106,11 @@ pytest
 
 Tests check the spectra against known sine amplitudes, the features against analytical
 values, and the fault frequencies against the published CWRU values.
+
+## Changelog
+
+- **0.2.0**: spectral kurtosis and automatic band selection (`spectral_kurtosis`, `select_band`); frequency-domain features (`frequency_features`); the demo now selects its band automatically.
+- **0.1.0**: first release: segmentation, time-domain features, spectra, envelope analysis, bearing fault frequencies, CWRU loader.
 
 ## License
 

@@ -41,3 +41,33 @@ def time_features(windows, eps=1e-12):
     return np.column_stack(
         [mean, std, rms, peak, p2p, skew, kurt, crest, shape, impulse, clearance]
     )
+
+
+FREQ_FEATURE_NAMES = [
+    "mean_freq", "freq_std", "rms_freq", "peak_freq", "spectral_entropy",
+]
+
+
+def frequency_features(windows, fs, eps=1e-12):
+    """Compute 5 frequency-domain features per window from its power spectrum.
+
+    mean_freq        : spectral centroid (Hz)
+    freq_std         : spread of the spectrum around the centroid (Hz)
+    rms_freq         : root-mean-square frequency (Hz)
+    peak_freq        : frequency of the largest spectral line (Hz)
+    spectral_entropy : normalized Shannon entropy of the spectrum, in [0, 1]
+                       (low = energy in a few lines, high = noise-like)
+
+    Returns np.ndarray, shape (n_windows, 5) — columns follow ``FREQ_FEATURE_NAMES``.
+    """
+    w = np.atleast_2d(np.asarray(windows, dtype=float))
+    w = w - w.mean(axis=1, keepdims=True)
+    p = np.abs(np.fft.rfft(w, axis=1)) ** 2
+    f = np.fft.rfftfreq(w.shape[1], d=1.0 / fs)
+    prob = p / (p.sum(axis=1, keepdims=True) + eps)
+    mean_f = prob @ f
+    std_f = np.sqrt(np.sum(prob * (f[None, :] - mean_f[:, None]) ** 2, axis=1))
+    rms_f = np.sqrt(prob @ f ** 2)
+    peak_f = f[np.argmax(p, axis=1)]
+    ent = -np.sum(prob * np.log(prob + eps), axis=1) / np.log(f.size)
+    return np.column_stack([mean_f, std_f, rms_f, peak_f, ent])

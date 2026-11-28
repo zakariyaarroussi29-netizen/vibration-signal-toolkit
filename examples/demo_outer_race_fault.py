@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vibkit import (amplitude_spectrum, envelope_spectrum, spectrogram,  # noqa: E402
-                    fault_frequencies, time_features, FEATURE_NAMES)
+                    fault_frequencies, time_features, FEATURE_NAMES, select_band)
 from vibkit.bearing import CWRU_DE_6205  # noqa: E402
 
 
@@ -52,7 +52,10 @@ def main():
     print(f"Kurtosis: {feats['kurtosis']:.2f}  (Gaussian noise ~ 3)")
 
     f, a = amplitude_spectrum(x, fs)
-    fe, ae = envelope_spectrum(x, fs, band=(2_000, 4_000))
+    res = select_band(x, fs)  # automatic band via spectral kurtosis
+    lo, hi = res["band"]
+    print(f"Band selected by spectral kurtosis: {lo:.0f}-{hi:.0f} Hz (SK = {res['sk']:.1f})")
+    fe, ae = envelope_spectrum(x, fs, band=res["band"])
     sel = (fe > 20) & (fe < 500)
     peak = fe[sel][np.argmax(ae[sel])]
     print(f"Largest envelope-spectrum peak: {peak:.1f} Hz")
@@ -66,7 +69,7 @@ def main():
     for k in range(1, 4):
         axes[2].axvline(k * bpfo, color="r", ls="--", lw=0.8,
                         label="BPFO harmonics" if k == 1 else None)
-    axes[2].set(title="Envelope spectrum (band 2–4 kHz)", xlabel="Frequency [Hz]",
+    axes[2].set(title=f"Envelope spectrum (auto band {lo:.0f}–{hi:.0f} Hz)", xlabel="Frequency [Hz]",
                 xlim=(0, 500))
     axes[2].legend()
     fig.tight_layout()
